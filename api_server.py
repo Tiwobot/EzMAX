@@ -811,6 +811,159 @@ async def get_person_groups_endpoint(xsrf_token: str = Header(..., alias="X-XSRF
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def get_effort_trackers(session: requests.Session, xsrf_token: str, user_id: str):
+    """
+    Fetch RequestEffortTracker_c entities filtered by PhaseId = 'InUse_c' and EffortOwner_c = user_id
+    Returns list of effort tracker IDs
+    """
+    # URL encode the filter parameter
+    filter_param = quote_plus(f"(PhaseId = 'InUse_c' and EffortOwner_c = '{user_id}')")
+    url = f"https://destek.kafein.com.tr/rest/797952178/ems/RequestEffortTracker_c?filter={filter_param}&layout=Id,DisplayLabel,PhaseId,LastUpdateTime&meta=totalCount&size=3000&skip=0"
+    
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
+        "Host": "destek.kafein.com.tr",
+        "Referer": "https://destek.kafein.com.tr/saw/custom/RequestEffortTracker_c?TENANTID=797952178",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:148.0) Gecko/20100101 Firefox/148.0",
+        "X-Client-Tenant-Version": "v29",
+        "X-REQUEST-LAND": "Unknown",
+        "X-Requested-With": "XMLHttpRequest",
+        "X-UI-Timestamp": str(int(time.time() * 1000)),
+        "X-XSRF-TOKEN": xsrf_token
+    }
+    
+    response = session.get(url, headers=headers)
+    response.raise_for_status()
+    
+    response_data = json.loads(response.text)
+    entities = response_data.get("entities", [])
+    
+    # Extract IDs from entities
+    effort_tracker_ids = []
+    for entity in entities:
+        properties = entity.get("properties", {})
+        effort_id = properties.get("Id")
+        if effort_id:
+            effort_tracker_ids.append(effort_id)
+    
+    return effort_tracker_ids
+
+def get_effort_tracker_details(session: requests.Session, xsrf_token: str, effort_tracker_id: str):
+    """
+    Fetch full details for a specific RequestEffortTracker_c entity by ID
+    """
+    url = f"https://destek.kafein.com.tr/rest/797952178/ems/RequestEffortTracker_c/{effort_tracker_id}?layout=FULL_LAYOUT,RELATION_LAYOUT.item"
+    
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
+        "Host": "destek.kafein.com.tr",
+        "Referer": "https://destek.kafein.com.tr/saw/custom/RequestEffortTracker_c?TENANTID=797952178",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:148.0) Gecko/20100101 Firefox/148.0",
+        "X-Client-Tenant-Version": "v29",
+        "X-REQUEST-LAND": "Unknown",
+        "X-Requested-With": "XMLHttpRequest",
+        "X-UI-Timestamp": str(int(time.time() * 1000)),
+        "X-XSRF-TOKEN": xsrf_token
+    }
+    
+    response = session.get(url, headers=headers)
+    response.raise_for_status()
+    
+    return json.loads(response.text)
+
+@app.get("/api/effort-trackers")
+async def get_effort_trackers_endpoint(xsrf_token: str = Header(..., alias="X-XSRF-Token")):
+    """
+    Get effort trackers for the logged-in user when calendar is opened
+    """
+    try:
+        # Retrieve session using xsrf_token
+        session_data = sessions.get(xsrf_token)
+        if not session_data:
+            raise HTTPException(status_code=401, detail="Session not found. Please login again.")
+        
+        session = session_data['session']
+        username = session_data['username']
+        
+        # Get user ID from person info
+        person_info = get_person(session, xsrf_token, username)
+        if not person_info or not person_info.get("id"):
+            raise HTTPException(status_code=404, detail="User ID not found")
+        
+        user_id = person_info["id"]
+        
+        # Fetch effort tracker IDs
+        effort_tracker_ids = get_effort_trackers(session, xsrf_token, user_id)
+        
+        # Fetch full details for each effort tracker ID
+        effort_trackers = []
+        for effort_id in effort_tracker_ids:
+            try:
+                details_response = get_effort_tracker_details(session, xsrf_token, effort_id)
+                
+                # Validate response structure
+                if not isinstance(details_response, dict):
+                    print(f"Invalid response format for effort tracker {effort_id}")
+                    continue
+                
+                entities = details_response.get("entities", [])
+                if not entities or len(entities) == 0:
+                    print(f"No entities found in response for effort tracker {effort_id}")
+                    continue
+                
+                entity = entities[0]
+                properties = entity.get("properties", {})
+                related_properties = entity.get("related_properties", {})
+                
+                # Validate required fields
+                if "EffortStartDate_c" not in properties or "EffortEndDate_c" not in properties:
+                    print(f"Missing required date fields for effort tracker {effort_id}")
+                    continue
+                
+                # Extract effort data
+                effort_data = {
+                    "id": properties.get("Id"),
+                    "displayLabel": properties.get("DisplayLabel"),
+                    "effortStartDate": properties.get("EffortStartDate_c"),
+                    "effortEndDate": properties.get("EffortEndDate_c"),
+                    "effortExplanation": properties.get("EffortExplanation_c", ""),
+                    "totalEffortTime": properties.get("TotalEffortTime_c", ""),
+                    "hours": properties.get("Hours_c", 0),
+                    "minutes": properties.get("Minutes_c", 0),
+                    "days": properties.get("Days_c", 0),
+                    "contract": related_properties.get("Contract_c", {}).get("DisplayLabel", ""),
+                    "request": related_properties.get("Request_c", {}).get("DisplayLabel", ""),
+                }
+                
+                effort_trackers.append(effort_data)
+                
+            except Exception as e:
+                print(f"Error fetching details for effort tracker {effort_id}: {str(e)}")
+                # Continue with other IDs even if one fails
+                continue
+        
+        return {
+            "success": True,
+            "effortTrackers": effort_trackers
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/send", response_model=SendResponse)
 async def send_data(send_request: SendRequest, xsrf_token: str = Header(..., alias="X-XSRF-Token")):
     try:

@@ -21,6 +21,313 @@ interface PersonGroupItem {
   isDeleted: boolean
 }
 
+// Calendar Component
+const Calendar = ({ month, year, onMonthChange, onYearChange, onClose, effortTrackers, onEffortClick }: { 
+  month: number; 
+  year: number; 
+  onMonthChange: (month: number) => void;
+  onYearChange: (year: number) => void;
+  onClose: () => void;
+  effortTrackers: any[];
+  onEffortClick: (effort: any) => void;
+}) => {
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  
+  const firstDayOfMonth = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const daysInPrevMonth = new Date(year, month, 0).getDate()
+  
+  const days: (number | null)[] = []
+  
+  // Add days from previous month
+  for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+    days.push(null)
+  }
+  
+  // Add days from current month
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push(i)
+  }
+  
+  // Fill remaining cells to complete the grid
+  const remainingCells = 42 - days.length // 6 rows * 7 days
+  for (let i = 1; i <= remainingCells; i++) {
+    days.push(null)
+  }
+  
+  const goToPreviousMonth = () => {
+    if (month === 0) {
+      onMonthChange(11)
+      onYearChange(year - 1)
+    } else {
+      onMonthChange(month - 1)
+    }
+  }
+  
+  const goToNextMonth = () => {
+    if (month === 11) {
+      onMonthChange(0)
+      onYearChange(year + 1)
+    } else {
+      onMonthChange(month + 1)
+    }
+  }
+  
+  const today = new Date()
+  const isToday = (day: number | null) => {
+    return day !== null && 
+           month === today.getMonth() && 
+           year === today.getFullYear() && 
+           day === today.getDate()
+  }
+  
+  // Get efforts for a specific date
+  const getEffortsForDate = (day: number | null): any[] => {
+    if (day === null) return []
+    
+    const date = new Date(year, month, day)
+    const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0).getTime()
+    const dateEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999).getTime()
+    
+    return effortTrackers.filter(effort => {
+      const effortStart = effort.effortStartDate
+      const effortEnd = effort.effortEndDate
+      
+      // Check if effort overlaps with this date
+      return (effortStart <= dateEnd && effortEnd >= dateStart)
+    })
+  }
+  
+  // Format time from timestamp
+  const formatTime = (timestamp: number): string => {
+    const date = new Date(timestamp)
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+    return `${hours}:${minutes}`
+  }
+  
+  // Truncate text to specified length
+  const truncateText = (text: string, maxLength: number): string => {
+    if (!text) return 'No description'
+    if (text.length <= maxLength) return text
+    return text.substring(0, maxLength) + '...'
+  }
+  
+  return (
+    <div style={{
+      width: '100%',
+    }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '1.5rem',
+      }}>
+        <button
+          type="button"
+          onClick={goToPreviousMonth}
+          style={{
+            padding: '0.5rem 1rem',
+            fontSize: '1rem',
+            fontWeight: 'bold',
+            backgroundColor: '#000000',
+            color: '#ffffff',
+            border: '2px solid #ffffff',
+            cursor: 'pointer',
+            fontFamily: 'Arial, sans-serif',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.textDecoration = 'underline'
+            e.currentTarget.style.backgroundColor = '#ffffff'
+            e.currentTarget.style.color = '#000000'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.textDecoration = 'none'
+            e.currentTarget.style.backgroundColor = '#000000'
+            e.currentTarget.style.color = '#ffffff'
+          }}
+        >
+          ←
+        </button>
+        <h3 style={{
+          color: '#ffffff',
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '1.5rem',
+          margin: 0,
+        }}>
+          {monthNames[month]} {year}
+        </h3>
+        <div style={{
+          display: 'flex',
+          gap: '0.5rem',
+          alignItems: 'center',
+        }}>
+          <button
+            type="button"
+            onClick={goToNextMonth}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '1rem',
+              fontWeight: 'bold',
+              backgroundColor: '#000000',
+              color: '#ffffff',
+              border: '2px solid #ffffff',
+              cursor: 'pointer',
+              fontFamily: 'Arial, sans-serif',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.textDecoration = 'underline'
+              e.currentTarget.style.backgroundColor = '#ffffff'
+              e.currentTarget.style.color = '#000000'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.textDecoration = 'none'
+              e.currentTarget.style.backgroundColor = '#000000'
+              e.currentTarget.style.color = '#ffffff'
+            }}
+          >
+            →
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '1rem',
+              fontWeight: 'bold',
+              backgroundColor: '#000000',
+              color: '#ffffff',
+              border: '2px solid #ffffff',
+              cursor: 'pointer',
+              fontFamily: 'Arial, sans-serif',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.textDecoration = 'underline'
+              e.currentTarget.style.backgroundColor = '#ffffff'
+              e.currentTarget.style.color = '#000000'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.textDecoration = 'none'
+              e.currentTarget.style.backgroundColor = '#000000'
+              e.currentTarget.style.color = '#ffffff'
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+      
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(7, 1fr)',
+        gap: '0.25rem',
+        border: '1px solid #ffffff',
+      }}>
+        {dayNames.map((day) => (
+          <div
+            key={day}
+            style={{
+              padding: '0.5rem',
+              textAlign: 'center',
+              color: '#ffffff',
+              fontFamily: 'Arial, sans-serif',
+              fontSize: '0.9rem',
+              fontWeight: 'bold',
+              backgroundColor: '#1a1a1a',
+              borderBottom: '2px solid #ffffff',
+            }}
+          >
+            {day}
+          </div>
+        ))}
+        {days.map((day, index) => (
+          <div
+            key={index}
+            style={{
+              minHeight: '120px',
+              display: 'flex',
+              flexDirection: 'column',
+              border: isToday(day) ? '2px solid #ffffff' : '1px solid #333333',
+              backgroundColor: day === null ? '#0a0a0a' : (isToday(day) ? '#1a1a1a' : '#000000'),
+              cursor: day !== null ? 'pointer' : 'default',
+              padding: '0.5rem',
+            }}
+            onMouseEnter={(e) => {
+              if (day !== null) {
+                e.currentTarget.style.backgroundColor = '#1a1a1a'
+                e.currentTarget.style.borderColor = '#ffffff'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (day !== null && !isToday(day)) {
+                e.currentTarget.style.backgroundColor = '#000000'
+                e.currentTarget.style.borderColor = '#333333'
+              } else if (day !== null && isToday(day)) {
+                e.currentTarget.style.backgroundColor = '#1a1a1a'
+                e.currentTarget.style.borderColor = '#ffffff'
+              }
+            }}
+          >
+            <div style={{
+              color: day === null ? '#444444' : (isToday(day) ? '#ffffff' : '#ffffff'),
+              fontFamily: 'Arial, sans-serif',
+              fontSize: '1rem',
+              fontWeight: isToday(day) ? 'bold' : 'normal',
+              marginBottom: '0.5rem',
+              textAlign: 'left',
+            }}>
+              {day}
+            </div>
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.25rem',
+              overflowY: 'auto',
+            }}>
+              {day !== null && getEffortsForDate(day).map((effort, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => onEffortClick(effort)}
+                  style={{
+                    padding: '0.25rem 0.5rem',
+                    backgroundColor: '#333333',
+                    border: '1px solid #555555',
+                    borderRadius: '2px',
+                    fontSize: '0.75rem',
+                    color: '#ffffff',
+                    fontFamily: 'Arial, sans-serif',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#444444'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#333333'
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', marginBottom: '0.1rem' }}>
+                    {formatTime(effort.effortStartDate)} - {formatTime(effort.effortEndDate)}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#cccccc' }}>
+                    {truncateText(effort.effortExplanation || 'No description', 25)}
+                  </div>
+                  {effort.request && (
+                    <div style={{ fontSize: '0.65rem', color: '#aaaaaa', marginTop: '0.1rem' }}>
+                      {effort.request}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Custom TimeInput component that forces 24-hour format
 const TimeInput = ({ value, onChange, style }: { value: string; onChange: (value: string) => void; style: React.CSSProperties }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,6 +433,12 @@ export default function Dashboard() {
   const [selectedPersonGroup, setSelectedPersonGroup] = useState<string>('')
   const [personGroupSearchTerm, setPersonGroupSearchTerm] = useState<string>('')
   const [loadingPersonGroups, setLoadingPersonGroups] = useState(false)
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+  const [effortTrackers, setEffortTrackers] = useState<any[]>([])
+  const [loadingEffortTrackers, setLoadingEffortTrackers] = useState(false)
+  const [selectedEffort, setSelectedEffort] = useState<any | null>(null)
 
   useEffect(() => {
     fetchRequests()
@@ -213,6 +526,13 @@ export default function Dashboard() {
       setFilteredRequests(filtered)
     }
   }, [searchTerm, requests])
+
+  useEffect(() => {
+    // Fetch effort trackers when calendar is opened
+    if (showCalendar) {
+      fetchEffortTrackers()
+    }
+  }, [showCalendar])
 
   const fetchRequests = async () => {
     try {
@@ -367,6 +687,38 @@ export default function Dashboard() {
     }
   }
 
+  const fetchEffortTrackers = async () => {
+    try {
+      setLoadingEffortTrackers(true)
+      const xsrf_token = localStorage.getItem('xsrf_token')
+      if (!xsrf_token) {
+        alert('No session found. Please login again.')
+        return
+      }
+
+      const response = await fetch('http://localhost:8080/api/effort-trackers', {
+        method: 'GET',
+        headers: {
+          'X-XSRF-Token': xsrf_token,
+        },
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setEffortTrackers(data.effortTrackers || [])
+      } else {
+        console.error('Failed to fetch effort trackers:', data.detail || 'Unknown error')
+        setEffortTrackers([])
+      }
+    } catch (error) {
+      console.error('Error fetching effort trackers:', error)
+      setEffortTrackers([])
+    } finally {
+      setLoadingEffortTrackers(false)
+    }
+  }
+
   const isFormValid = () => {
     if (createNew) {
       // For "Create new" flow: contract, person group, name, description, and all effort fields
@@ -508,6 +860,41 @@ export default function Dashboard() {
       >
         Back to Login
       </button>
+      <button
+        type="button"
+        onClick={() => setShowCalendar(!showCalendar)}
+        style={{
+          position: 'absolute',
+          top: '1rem',
+          right: '1rem',
+          padding: '0.75rem 1.5rem',
+          fontSize: '1rem',
+          fontWeight: 'bold',
+          backgroundColor: showCalendar ? '#ffffff' : '#000000',
+          color: showCalendar ? '#000000' : '#ffffff',
+          border: '2px solid #ffffff',
+          cursor: 'pointer',
+          fontFamily: 'Arial, sans-serif',
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.textDecoration = 'underline'
+          if (!showCalendar) {
+            e.currentTarget.style.backgroundColor = '#ffffff'
+            e.currentTarget.style.color = '#000000'
+          }
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.textDecoration = 'none'
+          if (!showCalendar) {
+            e.currentTarget.style.backgroundColor = '#000000'
+            e.currentTarget.style.color = '#ffffff'
+          }
+        }}
+      >
+        Calendar
+      </button>
       {userName && (
         <div style={{
           position: 'absolute',
@@ -518,6 +905,156 @@ export default function Dashboard() {
           fontSize: '1.2rem',
         }}>
           {userName}
+        </div>
+      )}
+      {showCalendar && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: '#000000',
+            border: '2px solid #ffffff',
+            padding: '2rem',
+            maxWidth: '1400px',
+            width: '95%',
+            maxHeight: '95vh',
+            overflow: 'auto',
+          }}>
+            <Calendar 
+              month={currentMonth} 
+              year={currentYear}
+              onMonthChange={setCurrentMonth}
+              onYearChange={setCurrentYear}
+              onClose={() => setShowCalendar(false)}
+              effortTrackers={effortTrackers}
+              onEffortClick={(effort) => setSelectedEffort(effort)}
+            />
+          </div>
+        </div>
+      )}
+      {selectedEffort && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1001,
+        }}
+        onClick={() => setSelectedEffort(null)}
+        >
+          <div style={{
+            backgroundColor: '#000000',
+            border: '2px solid #ffffff',
+            padding: '2rem',
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflow: 'auto',
+          }}
+          onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1.5rem',
+            }}>
+              <h2 style={{
+                color: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '1.5rem',
+                margin: 0,
+              }}>
+                Effort Details
+              </h2>
+              <button
+                type="button"
+                onClick={() => setSelectedEffort(null)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '1rem',
+                  fontWeight: 'bold',
+                  backgroundColor: '#000000',
+                  color: '#ffffff',
+                  border: '2px solid #ffffff',
+                  cursor: 'pointer',
+                  fontFamily: 'Arial, sans-serif',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textDecoration = 'underline'
+                  e.currentTarget.style.backgroundColor = '#ffffff'
+                  e.currentTarget.style.color = '#000000'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textDecoration = 'none'
+                  e.currentTarget.style.backgroundColor = '#000000'
+                  e.currentTarget.style.color = '#ffffff'
+                }}
+              >
+                Close
+              </button>
+            </div>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+              color: '#ffffff',
+              fontFamily: 'Arial, sans-serif',
+            }}>
+              <div>
+                <div style={{ fontSize: '0.9rem', color: '#aaaaaa', marginBottom: '0.25rem' }}>Time Range</div>
+                <div style={{ fontSize: '1.1rem' }}>
+                  {new Date(selectedEffort.effortStartDate).toLocaleString()} - {new Date(selectedEffort.effortEndDate).toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.9rem', color: '#aaaaaa', marginBottom: '0.25rem' }}>Effort Explanation</div>
+                <div style={{ fontSize: '1rem' }}>{selectedEffort.effortExplanation || 'No description'}</div>
+              </div>
+              {selectedEffort.totalEffortTime && (
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#aaaaaa', marginBottom: '0.25rem' }}>Total Effort Time</div>
+                  <div style={{ fontSize: '1rem' }}>{selectedEffort.totalEffortTime}</div>
+                </div>
+              )}
+              {selectedEffort.request && (
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#aaaaaa', marginBottom: '0.25rem' }}>Request</div>
+                  <div style={{ fontSize: '1rem' }}>{selectedEffort.request}</div>
+                </div>
+              )}
+              {selectedEffort.contract && (
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#aaaaaa', marginBottom: '0.25rem' }}>Contract</div>
+                  <div style={{ fontSize: '1rem' }}>{selectedEffort.contract}</div>
+                </div>
+              )}
+              {(selectedEffort.hours || selectedEffort.minutes || selectedEffort.days) && (
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#aaaaaa', marginBottom: '0.25rem' }}>Breakdown</div>
+                  <div style={{ fontSize: '1rem' }}>
+                    {selectedEffort.days > 0 && `${selectedEffort.days} day(s) `}
+                    {selectedEffort.hours > 0 && `${selectedEffort.hours} hour(s) `}
+                    {selectedEffort.minutes > 0 && `${selectedEffort.minutes} minute(s)`}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
       <div style={{
