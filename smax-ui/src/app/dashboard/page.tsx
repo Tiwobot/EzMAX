@@ -22,14 +22,15 @@ interface PersonGroupItem {
 }
 
 // Calendar Component
-const Calendar = ({ month, year, onMonthChange, onYearChange, onClose, effortTrackers, onEffortClick }: { 
-  month: number; 
-  year: number; 
+const Calendar = ({ month, year, onMonthChange, onYearChange, onClose, effortTrackers, onEffortClick, onDateClick }: {
+  month: number;
+  year: number;
   onMonthChange: (month: number) => void;
   onYearChange: (year: number) => void;
   onClose: () => void;
   effortTrackers: any[];
   onEffortClick: (effort: any) => void;
+  onDateClick: (year: number, month: number, day: number) => void;
 }) => {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -244,6 +245,7 @@ const Calendar = ({ month, year, onMonthChange, onYearChange, onClose, effortTra
         {days.map((day, index) => (
           <div
             key={index}
+            onClick={() => day !== null && onDateClick(year, month, day)}
             style={{
               minHeight: '120px',
               display: 'flex',
@@ -289,7 +291,7 @@ const Calendar = ({ month, year, onMonthChange, onYearChange, onClose, effortTra
               {day !== null && getEffortsForDate(day).map((effort, idx) => (
                 <div
                   key={idx}
-                  onClick={() => onEffortClick(effort)}
+                  onClick={(e) => { e.stopPropagation(); onEffortClick(effort); }}
                   style={{
                     padding: '0.25rem 0.5rem',
                     backgroundColor: '#333333',
@@ -439,6 +441,46 @@ export default function Dashboard() {
   const [effortTrackers, setEffortTrackers] = useState<any[]>([])
   const [loadingEffortTrackers, setLoadingEffortTrackers] = useState(false)
   const [selectedEffort, setSelectedEffort] = useState<any | null>(null)
+  const [weekly, setWeekly] = useState(false)
+  const [weeklyPeriodEnd, setWeeklyPeriodEnd] = useState<string>('')
+  const [excludeWeeks, setExcludeWeeks] = useState<Set<string>>(new Set())
+  const [favoriteContracts, setFavoriteContracts] = useState<string[]>([])
+  const [favoritePersonGroups, setFavoritePersonGroups] = useState<string[]>([])
+
+  // Load favorites from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedContracts = localStorage.getItem('ezmax_favorite_contracts')
+      const savedGroups = localStorage.getItem('ezmax_favorite_person_groups')
+      if (savedContracts) setFavoriteContracts(JSON.parse(savedContracts))
+      if (savedGroups) setFavoritePersonGroups(JSON.parse(savedGroups))
+    } catch (e) {}
+  }, [])
+
+  const toggleFavoriteContract = (id: string) => {
+    setFavoriteContracts(prev => {
+      const next = prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+      localStorage.setItem('ezmax_favorite_contracts', JSON.stringify(next))
+      return next
+    })
+  }
+
+  const toggleFavoritePersonGroup = (id: string) => {
+    setFavoritePersonGroups(prev => {
+      const next = prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]
+      localStorage.setItem('ezmax_favorite_person_groups', JSON.stringify(next))
+      return next
+    })
+  }
+
+  const handleCalendarDateClick = (year: number, month: number, day: number) => {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    setEffortStartDate(dateStr)
+    setEffortEndDate(dateStr)
+    setEffortStartTime('')
+    setEffortEndTime('')
+    setShowCalendar(false)
+  }
 
   useEffect(() => {
     fetchRequests()
@@ -476,17 +518,21 @@ export default function Dashboard() {
   }, [createNew])
 
   useEffect(() => {
-    // Filter contracts based on search term
-    if (contractSearchTerm.trim() === '') {
-      setFilteredContracts(contracts)
-    } else {
-      const filtered = contracts.filter(contract =>
+    // Filter contracts based on search term, sort favorites to top
+    let result = contracts
+    if (contractSearchTerm.trim() !== '') {
+      result = result.filter(contract =>
         contract.displayLabel.toLowerCase().includes(contractSearchTerm.toLowerCase()) ||
         contract.id.toLowerCase().includes(contractSearchTerm.toLowerCase())
       )
-      setFilteredContracts(filtered)
     }
-  }, [contractSearchTerm, contracts])
+    result = [...result].sort((a, b) => {
+      const aFav = favoriteContracts.includes(a.id) ? 0 : 1
+      const bFav = favoriteContracts.includes(b.id) ? 0 : 1
+      return aFav - bFav
+    })
+    setFilteredContracts(result)
+  }, [contractSearchTerm, contracts, favoriteContracts])
 
   useEffect(() => {
     // Fetch person groups when a contract is selected
@@ -502,17 +548,21 @@ export default function Dashboard() {
   }, [selectedContract])
 
   useEffect(() => {
-    // Filter person groups based on search term
-    if (personGroupSearchTerm.trim() === '') {
-      setFilteredPersonGroups(personGroups)
-    } else {
-      const filtered = personGroups.filter(group =>
+    // Filter person groups based on search term, sort favorites to top
+    let result = personGroups
+    if (personGroupSearchTerm.trim() !== '') {
+      result = result.filter(group =>
         group.name.toLowerCase().includes(personGroupSearchTerm.toLowerCase()) ||
         group.id.toLowerCase().includes(personGroupSearchTerm.toLowerCase())
       )
-      setFilteredPersonGroups(filtered)
     }
-  }, [personGroupSearchTerm, personGroups])
+    result = [...result].sort((a, b) => {
+      const aFav = favoritePersonGroups.includes(a.id) ? 0 : 1
+      const bFav = favoritePersonGroups.includes(b.id) ? 0 : 1
+      return aFav - bFav
+    })
+    setFilteredPersonGroups(result)
+  }, [personGroupSearchTerm, personGroups, favoritePersonGroups])
 
   useEffect(() => {
     // Filter requests based on search term
@@ -542,7 +592,7 @@ export default function Dashboard() {
         return
       }
 
-      const response = await fetch('http://localhost:8080/api/requests', {
+      const response = await fetch('http://localhost:8082/api/requests', {
         method: 'GET',
         headers: {
           'X-XSRF-Token': xsrf_token,
@@ -572,7 +622,7 @@ export default function Dashboard() {
         return
       }
 
-      const response = await fetch('http://localhost:8080/api/person', {
+      const response = await fetch('http://localhost:8082/api/person', {
         method: 'GET',
         headers: {
           'X-XSRF-Token': xsrf_token,
@@ -598,7 +648,7 @@ export default function Dashboard() {
         return
       }
 
-      const response = await fetch('http://localhost:8080/api/contract', {
+      const response = await fetch('http://localhost:8082/api/contract', {
         method: 'POST',
         headers: {
           'X-XSRF-Token': xsrf_token,
@@ -633,7 +683,7 @@ export default function Dashboard() {
         return
       }
 
-      const response = await fetch('http://localhost:8080/api/contracts', {
+      const response = await fetch('http://localhost:8082/api/contracts', {
         method: 'GET',
         headers: {
           'X-XSRF-Token': xsrf_token,
@@ -664,7 +714,7 @@ export default function Dashboard() {
         return
       }
 
-      const response = await fetch('http://localhost:8080/api/person-groups', {
+      const response = await fetch('http://localhost:8082/api/person-groups', {
         method: 'GET',
         headers: {
           'X-XSRF-Token': xsrf_token,
@@ -696,7 +746,7 @@ export default function Dashboard() {
         return
       }
 
-      const response = await fetch('http://localhost:8080/api/effort-trackers', {
+      const response = await fetch('http://localhost:8082/api/effort-trackers', {
         method: 'GET',
         headers: {
           'X-XSRF-Token': xsrf_token,
@@ -719,30 +769,53 @@ export default function Dashboard() {
     }
   }
 
+  // Compute weekly dates for preview
+  const getWeeklyDates = (): string[] => {
+    if (!effortStartDate || !weeklyPeriodEnd) return []
+    const dates: string[] = []
+    const start = new Date(effortStartDate)
+    const end = new Date(weeklyPeriodEnd)
+    const current = new Date(start)
+    while (current <= end) {
+      dates.push(current.toISOString().split('T')[0])
+      current.setDate(current.getDate() + 7)
+    }
+    return dates
+  }
+
+  const weeklyDates = weekly ? getWeeklyDates() : []
+
+  const toggleExcludeWeek = (dateStr: string) => {
+    setExcludeWeeks(prev => {
+      const next = new Set(prev)
+      if (next.has(dateStr)) {
+        next.delete(dateStr)
+      } else {
+        next.add(dateStr)
+      }
+      return next
+    })
+  }
+
   const isFormValid = () => {
+    const baseValid = effortExplanation && effortStartDate && effortStartTime &&
+      (weekly ? weeklyPeriodEnd : (effortEndDate && effortEndTime))
+
+    if (weekly && !effortEndTime) return false
+
     if (createNew) {
-      // For "Create new" flow: contract, person group, name, description, and all effort fields
       return (
         selectedContract &&
         selectedPersonGroup &&
         newContractName &&
         newContractDescription &&
-        effortExplanation &&
-        effortStartDate &&
-        effortStartTime &&
-        effortEndDate &&
-        effortEndTime
+        baseValid
       )
     } else {
-      // For normal flow: request selected, contract shown, and all effort fields
       return (
         selectedValue &&
         contractId &&
-        effortExplanation &&
-        effortStartDate &&
-        effortStartTime &&
-        effortEndDate &&
-        effortEndTime
+        baseValid
       )
     }
   }
@@ -795,7 +868,7 @@ export default function Dashboard() {
     }
 
     try {
-      const response = await fetch('http://localhost:8080/api/send', {
+      const response = await fetch('http://localhost:8082/api/send', {
         method: 'POST',
         headers: {
           'X-XSRF-Token': xsrf_token,
@@ -929,14 +1002,15 @@ export default function Dashboard() {
             maxHeight: '95vh',
             overflow: 'auto',
           }}>
-            <Calendar 
-              month={currentMonth} 
+            <Calendar
+              month={currentMonth}
               year={currentYear}
               onMonthChange={setCurrentMonth}
               onYearChange={setCurrentYear}
               onClose={() => setShowCalendar(false)}
               effortTrackers={effortTrackers}
               onEffortClick={(effort) => setSelectedEffort(effort)}
+              onDateClick={handleCalendarDateClick}
             />
           </div>
         </div>
@@ -1204,7 +1278,7 @@ export default function Dashboard() {
                     outline: 'none',
                     fontFamily: 'Arial, sans-serif',
                     cursor: 'pointer',
-                    width: '100%',
+                    flex: 1,
                     marginLeft: '200px',
                   }}
                 >
@@ -1217,10 +1291,35 @@ export default function Dashboard() {
                       value={contract.id}
                       style={{ backgroundColor: '#000000', color: '#ffffff' }}
                     >
-                      {contract.id}: {contract.displayLabel} {contract.isDeleted ? '(Deleted)' : ''}
+                      {favoriteContracts.includes(contract.id) ? '\u2605 ' : ''}{contract.id}: {contract.displayLabel} {contract.isDeleted ? '(Deleted)' : ''}
                     </option>
                   ))}
                 </select>
+              )}
+              {selectedContract && (
+                <button
+                  type="button"
+                  onClick={() => toggleFavoriteContract(selectedContract)}
+                  title={favoriteContracts.includes(selectedContract) ? 'Unpin contract' : 'Pin contract to top'}
+                  style={{
+                    padding: '0.75rem 1rem',
+                    fontSize: '1.2rem',
+                    backgroundColor: favoriteContracts.includes(selectedContract) ? '#ffffff' : '#000000',
+                    color: favoriteContracts.includes(selectedContract) ? '#000000' : '#ffffff',
+                    border: '2px solid #ffffff',
+                    cursor: 'pointer',
+                    fontFamily: 'Arial, sans-serif',
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.textDecoration = 'underline'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.textDecoration = 'none'
+                  }}
+                >
+                  {favoriteContracts.includes(selectedContract) ? '\u2605' : '\u2606'}
+                </button>
               )}
             </div>
             {selectedContract && (
@@ -1266,7 +1365,7 @@ export default function Dashboard() {
                         outline: 'none',
                         fontFamily: 'Arial, sans-serif',
                         cursor: 'pointer',
-                        width: '100%',
+                        flex: 1,
                         marginLeft: '200px',
                       }}
                     >
@@ -1279,10 +1378,35 @@ export default function Dashboard() {
                           value={group.id}
                           style={{ backgroundColor: '#000000', color: '#ffffff' }}
                         >
-                          {group.id}: {group.name} {group.isDeleted ? '(Deleted)' : ''}
+                          {favoritePersonGroups.includes(group.id) ? '\u2605 ' : ''}{group.id}: {group.name} {group.isDeleted ? '(Deleted)' : ''}
                         </option>
                       ))}
                     </select>
+                  )}
+                  {selectedPersonGroup && (
+                    <button
+                      type="button"
+                      onClick={() => toggleFavoritePersonGroup(selectedPersonGroup)}
+                      title={favoritePersonGroups.includes(selectedPersonGroup) ? 'Unpin group' : 'Pin group to top'}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        fontSize: '1.2rem',
+                        backgroundColor: favoritePersonGroups.includes(selectedPersonGroup) ? '#ffffff' : '#000000',
+                        color: favoritePersonGroups.includes(selectedPersonGroup) ? '#000000' : '#ffffff',
+                        border: '2px solid #ffffff',
+                        cursor: 'pointer',
+                        fontFamily: 'Arial, sans-serif',
+                        flexShrink: 0,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.textDecoration = 'underline'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.textDecoration = 'none'
+                      }}
+                    >
+                      {favoritePersonGroups.includes(selectedPersonGroup) ? '\u2605' : '\u2606'}
+                    </button>
                   )}
                 </div>
                 <input

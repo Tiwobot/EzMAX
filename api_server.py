@@ -17,7 +17,7 @@ sessions: Dict[str, dict] = {}
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -84,6 +84,10 @@ class SendRequest(BaseModel):
     personGroupId: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
+    # Weekly scheduler
+    weekly: Optional[bool] = False
+    weeklyPeriodEnd: Optional[int] = None  # End of the weekly period (timestamp ms)
+    excludeWeeks: Optional[List[str]] = None  # List of date strings (YYYY-MM-DD) to skip
 
 class SendResponse(BaseModel):
     success: bool
@@ -1030,7 +1034,71 @@ async def send_data(send_request: SendRequest, xsrf_token: str = Header(..., ali
         if not request_id_to_use or not send_request.contractId:
             raise HTTPException(status_code=400, detail="Missing request ID or contract ID for creating effort")
         
-        if send_request.scheduled:
+        if send_request.weekly:
+            # Weekly: Create effort entries every 7 days within a period
+            start_dt = datetime.fromtimestamp(send_request.effortStartDate / 1000)
+            end_dt = datetime.fromtimestamp(send_request.effortEndDate / 1000)
+
+            start_time = start_dt.time()
+            end_time = end_dt.time()
+
+            # First occurrence date
+            first_date = start_dt.date()
+            # Period end date
+            if send_request.weeklyPeriodEnd:
+                period_end = datetime.fromtimestamp(send_request.weeklyPeriodEnd / 1000).date()
+            else:
+                period_end = end_dt.date()
+
+            exclude_dates = set(send_request.excludeWeeks or [])
+
+            current_date = first_date
+            effort_results = []
+            effort_count = 0
+
+            while current_date <= period_end:
+                date_str = current_date.strftime('%Y-%m-%d')
+                if date_str not in exclude_dates:
+                    day_start_dt = datetime.combine(current_date, start_time)
+                    day_end_dt = datetime.combine(current_date, end_time)
+
+                    day_start_timestamp = int(day_start_dt.timestamp() * 1000)
+                    day_end_timestamp = int(day_end_dt.timestamp() * 1000)
+
+                    print(f"\n📅 Creating weekly effort for {date_str} ({start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')})")
+
+                    effort_result = create_effort(
+                        session=session,
+                        xsrf_token=xsrf_token,
+                        request_id=request_id_to_use,
+                        contract_id=send_request.contractId,
+                        effort_owner_id=send_request.userId,
+                        effort_explanation=send_request.effortExplanation,
+                        effort_start_date=day_start_timestamp,
+                        effort_end_date=day_end_timestamp
+                    )
+
+                    effort_results.append(effort_result)
+
+                    if effort_result["success"]:
+                        effort_count += 1
+                        if effort_result.get("effort_id"):
+                            print(f"✅ Effort ID: {effort_result['effort_id']}")
+                    else:
+                        print(f"❌ Failed: {effort_result.get('error', 'Unknown error')}")
+                else:
+                    print(f"\n⏭️ Skipping excluded week: {date_str}")
+
+                current_date += timedelta(days=7)
+
+            print(f"\n📊 Weekly Effort Summary:")
+            print(f"Total entries created: {effort_count}/{len(effort_results)}")
+
+            if effort_count < len(effort_results):
+                failed_results = [r for r in effort_results if not r["success"]]
+                error_messages = [r.get("error", "Unknown error") for r in failed_results]
+                raise HTTPException(status_code=500, detail=f"Failed to create some weekly effort entries: {', '.join(error_messages)}")
+        elif send_request.scheduled:
             # Scheduled: Create multiple effort entries, one for each day
             # Extract time components from start and end dates
             start_dt = datetime.fromtimestamp(send_request.effortStartDate / 1000)
@@ -1133,4 +1201,4 @@ async def send_data(send_request: SendRequest, xsrf_token: str = Header(..., ali
 
 if __name__ == '__main__':
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=8082)
