@@ -834,7 +834,8 @@ export default function Dashboard() {
 
     // Combine date and time and convert to timestamp (milliseconds)
     const startDateTime = `${effortStartDate}T${effortStartTime}`
-    const endDateTime = `${effortEndDate}T${effortEndTime}`
+    const endDate = weekly ? effortStartDate : effortEndDate
+    const endDateTime = `${endDate}T${effortEndTime}`
     const startTimestamp = new Date(startDateTime).getTime()
     const endTimestamp = new Date(endDateTime).getTime()
 
@@ -845,6 +846,11 @@ export default function Dashboard() {
       effortStartDate: startTimestamp,
       effortEndDate: endTimestamp,
       scheduled: scheduled,
+      weekly: weekly,
+      ...(weekly && weeklyPeriodEnd ? {
+        weeklyPeriodEnd: new Date(`${weeklyPeriodEnd}T${effortEndTime}`).getTime(),
+        excludeWeeks: Array.from(excludeWeeks),
+      } : {}),
     }
 
     if (createNew) {
@@ -1470,7 +1476,7 @@ export default function Dashboard() {
                     }}>
                       <button
                         type="button"
-                        onClick={() => setScheduled(!scheduled)}
+                        onClick={() => { setScheduled(!scheduled); if (!scheduled) setWeekly(false); }}
                         style={{
                           padding: '1rem 1.5rem',
                           fontSize: '1.2rem',
@@ -1494,6 +1500,30 @@ export default function Dashboard() {
                       >
                         Scheduled
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => { setWeekly(!weekly); if (!weekly) { setScheduled(false); setExcludeWeeks(new Set()); } }}
+                        style={{
+                          padding: '1rem 1.5rem',
+                          fontSize: '1.2rem',
+                          fontWeight: 'bold',
+                          backgroundColor: weekly ? '#ffffff' : '#000000',
+                          color: weekly ? '#000000' : '#ffffff',
+                          border: '2px solid #ffffff',
+                          cursor: 'pointer',
+                          fontFamily: 'Arial, sans-serif',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.1em',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.textDecoration = 'underline'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.textDecoration = 'none'
+                        }}
+                      >
+                        Weekly
+                      </button>
                       {showScheduledExplanation && (
                         <div style={{
                           color: '#ffffff',
@@ -1501,7 +1531,7 @@ export default function Dashboard() {
                           fontSize: '1rem',
                           flex: 1,
                         }}>
-                          When enabled, creates separate effort entries for each day between start and end dates, using the same start and end times for each day. Example: 13th May 15:00 to 16th May 17:00 creates entries for 13th, 14th, and 15th May (15:00 to 17:00 each day).
+                          When enabled, creates separate effort entries for each day between start and end dates, using the same start and end times for each day.
                         </div>
                       )}
                     </div>
@@ -1522,7 +1552,7 @@ export default function Dashboard() {
                           fontFamily: 'Arial, sans-serif',
                           fontSize: '1rem',
                         }}>
-                          Start Date
+                          {weekly ? 'First Date' : 'Start Date'}
                         </label>
                         <input
                           type="date"
@@ -1568,6 +1598,7 @@ export default function Dashboard() {
                         />
                       </div>
 
+                      {!weekly && (
                       <div style={{
                         display: 'flex',
                         flexDirection: 'column',
@@ -1596,6 +1627,7 @@ export default function Dashboard() {
                           }}
                         />
                       </div>
+                      )}
 
                       <div style={{
                         display: 'flex',
@@ -1625,6 +1657,93 @@ export default function Dashboard() {
                         />
                       </div>
                     </div>
+
+                    {weekly && (
+                      <>
+                        <div style={{
+                          display: 'flex',
+                          gap: '1rem',
+                          width: '100%',
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.5rem',
+                            flex: 1,
+                          }}>
+                            <label style={{
+                              color: '#ffffff',
+                              fontFamily: 'Arial, sans-serif',
+                              fontSize: '1rem',
+                            }}>
+                              Repeat Until
+                            </label>
+                            <input
+                              type="date"
+                              value={weeklyPeriodEnd}
+                              onChange={(e) => { setWeeklyPeriodEnd(e.target.value); setExcludeWeeks(new Set()); }}
+                              style={{
+                                padding: '1rem',
+                                fontSize: '1.2rem',
+                                backgroundColor: '#000000',
+                                color: '#ffffff',
+                                border: '2px solid #ffffff',
+                                outline: 'none',
+                                fontFamily: 'Arial, sans-serif',
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {weeklyDates.length > 0 && (
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.5rem',
+                            width: '100%',
+                          }}>
+                            <label style={{
+                              color: '#ffffff',
+                              fontFamily: 'Arial, sans-serif',
+                              fontSize: '1rem',
+                            }}>
+                              Weeks ({weeklyDates.length - excludeWeeks.size} of {weeklyDates.length} selected)
+                            </label>
+                            <div style={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: '0.5rem',
+                            }}>
+                              {weeklyDates.map(dateStr => {
+                                const excluded = excludeWeeks.has(dateStr)
+                                const d = new Date(dateStr + 'T00:00:00')
+                                const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                                return (
+                                  <button
+                                    key={dateStr}
+                                    type="button"
+                                    onClick={() => toggleExcludeWeek(dateStr)}
+                                    style={{
+                                      padding: '0.5rem 1rem',
+                                      fontSize: '1rem',
+                                      backgroundColor: excluded ? '#333333' : '#ffffff',
+                                      color: excluded ? '#666666' : '#000000',
+                                      border: excluded ? '1px solid #555555' : '2px solid #ffffff',
+                                      cursor: 'pointer',
+                                      fontFamily: 'Arial, sans-serif',
+                                      textDecoration: excluded ? 'line-through' : 'none',
+                                      opacity: excluded ? 0.5 : 1,
+                                    }}
+                                  >
+                                    {label}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </>
                 )}
               </>
@@ -1676,7 +1795,7 @@ export default function Dashboard() {
             }}>
               <button
                 type="button"
-                onClick={() => setScheduled(!scheduled)}
+                onClick={() => { setScheduled(!scheduled); if (!scheduled) setWeekly(false); }}
                 style={{
                   padding: '1rem 1.5rem',
                   fontSize: '1.2rem',
@@ -1700,6 +1819,30 @@ export default function Dashboard() {
               >
                 Scheduled
               </button>
+              <button
+                type="button"
+                onClick={() => { setWeekly(!weekly); if (!weekly) { setScheduled(false); setExcludeWeeks(new Set()); } }}
+                style={{
+                  padding: '1rem 1.5rem',
+                  fontSize: '1.2rem',
+                  fontWeight: 'bold',
+                  backgroundColor: weekly ? '#ffffff' : '#000000',
+                  color: weekly ? '#000000' : '#ffffff',
+                  border: '2px solid #ffffff',
+                  cursor: 'pointer',
+                  fontFamily: 'Arial, sans-serif',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textDecoration = 'underline'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textDecoration = 'none'
+                }}
+              >
+                Weekly
+              </button>
               {showScheduledExplanation && (
                 <div style={{
                   color: '#ffffff',
@@ -1707,7 +1850,7 @@ export default function Dashboard() {
                   fontSize: '1rem',
                   flex: 1,
                 }}>
-                  When enabled, creates separate effort entries for each day between start and end dates, using the same start and end times for each day. Example: 13th May 15:00 to 16th May 17:00 creates entries for 13th, 14th, and 15th May (15:00 to 17:00 each day).
+                  When enabled, creates separate effort entries for each day between start and end dates, using the same start and end times for each day.
                 </div>
               )}
             </div>
@@ -1728,7 +1871,7 @@ export default function Dashboard() {
                   fontFamily: 'Arial, sans-serif',
                   fontSize: '1rem',
                 }}>
-                  Start Date
+                  {weekly ? 'First Date' : 'Start Date'}
                 </label>
                 <input
                   type="date"
@@ -1774,6 +1917,7 @@ export default function Dashboard() {
                 />
               </div>
 
+              {!weekly && (
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -1802,6 +1946,7 @@ export default function Dashboard() {
                   }}
                 />
               </div>
+              )}
 
               <div style={{
                 display: 'flex',
@@ -1831,6 +1976,93 @@ export default function Dashboard() {
                 />
               </div>
             </div>
+
+            {weekly && (
+              <>
+                <div style={{
+                  display: 'flex',
+                  gap: '1rem',
+                  width: '100%',
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem',
+                    flex: 1,
+                  }}>
+                    <label style={{
+                      color: '#ffffff',
+                      fontFamily: 'Arial, sans-serif',
+                      fontSize: '1rem',
+                    }}>
+                      Repeat Until
+                    </label>
+                    <input
+                      type="date"
+                      value={weeklyPeriodEnd}
+                      onChange={(e) => { setWeeklyPeriodEnd(e.target.value); setExcludeWeeks(new Set()); }}
+                      style={{
+                        padding: '1rem',
+                        fontSize: '1.2rem',
+                        backgroundColor: '#000000',
+                        color: '#ffffff',
+                        border: '2px solid #ffffff',
+                        outline: 'none',
+                        fontFamily: 'Arial, sans-serif',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {weeklyDates.length > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem',
+                    width: '100%',
+                  }}>
+                    <label style={{
+                      color: '#ffffff',
+                      fontFamily: 'Arial, sans-serif',
+                      fontSize: '1rem',
+                    }}>
+                      Weeks ({weeklyDates.length - excludeWeeks.size} of {weeklyDates.length} selected)
+                    </label>
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem',
+                    }}>
+                      {weeklyDates.map(dateStr => {
+                        const excluded = excludeWeeks.has(dateStr)
+                        const d = new Date(dateStr + 'T00:00:00')
+                        const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                        return (
+                          <button
+                            key={dateStr}
+                            type="button"
+                            onClick={() => toggleExcludeWeek(dateStr)}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              fontSize: '1rem',
+                              backgroundColor: excluded ? '#333333' : '#ffffff',
+                              color: excluded ? '#666666' : '#000000',
+                              border: excluded ? '1px solid #555555' : '2px solid #ffffff',
+                              cursor: 'pointer',
+                              fontFamily: 'Arial, sans-serif',
+                              textDecoration: excluded ? 'line-through' : 'none',
+                              opacity: excluded ? 0.5 : 1,
+                            }}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </>
         )}
 
